@@ -23,17 +23,18 @@ class Mapping:
         self.assignments = assignments
         self.scores = np.array([])
         self.mutation_frequency = 0.1
+        self.hashtable = None
         self.initialize(N)
 
     def initialize(self,N):
-        self.n_cluster = np.random.randint(1,N/4)
+        self.n_cluster = np.random.randint(2,N/4)
         self.assignments = pd.Series( {i: np.random.randint(1,self.n_cluster)
                                        for i in range(N)},
-                                      name=['cluster'])
+                                      name='cluster')
         self.assignments.index.name = 'marker'
         self.setHashTable()
 
-    def setHashtable(self):
+    def setHashTable(self):
         if self.hashtable is None:
             self.hashtable = (self.assignments
                               .reset_index()
@@ -43,12 +44,14 @@ class Mapping:
     def evaluate(self,sequences):
         self.scores = []
         
-        for cluster,sequences in self.hashtable.items():
-            means = np.mean(sequences,axis=0)
-            stds = np.std(sequences,axis=0)
-            score_C = np.prod([nbinom.pmf(*convert_params(mean,std),seq)
-                               for (mean,std,seq) in zip(means,stds,sequences)])
-            self.scores = np.insert(self.scores,score_C)
+        for cluster,idx_seqC in self.hashtable.items():
+            seqC = sequences.iloc[idx_seqC].T
+            params = seqC.apply([np.mean,np.std]).T
+            
+            score_C = np.prod([nbinom.pmf(*convert_params(mean,std),seq[1])
+                               for (mean,std,seq) in
+                               zip(params['mean'],params['std'],seqC.iterrows())])
+            self.scores = np.append(self.scores,score_C)
         self.fitness = np.mean(self.scores)
 
     def mutate(self):

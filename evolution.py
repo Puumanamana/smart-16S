@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
 from model import Mapping
-from itertools import combinations
 from time import time
 import numpy as np
 import pandas as pd
-from scipy.stats import cauchy,norm
 import matplotlib.pyplot as plt
 
 np.random.seed(1234)
@@ -29,6 +27,7 @@ class Evolution:
         self.cores = 15
         self.fitnesses = []
 
+    @timer
     def calc_fitnesses(self):
         fitnesses = []
         for p in self.populations.values():
@@ -61,6 +60,7 @@ class Evolution:
         
         return zip(parent1,parent2),removed
 
+    @timer
     def mutate_generation(self):
         for player in self.populations.values():
             if np.random.uniform() < self.mutation_rate:
@@ -104,7 +104,8 @@ class Evolution:
         child = Mapping(assignments=new_assignments)
 
         return child
-    
+
+    @timer
     def make_next_generation(self):
         parent_indices,removed = self.select_next_gen()
         parent_list = [(self.populations[i1],self.populations[i2])
