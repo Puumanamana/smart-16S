@@ -74,6 +74,7 @@ class Evolution:
         reads = np.arange(0,N_MARKER)
 
         new_clusters = {0:[]}
+        new_assignments = {}
         n_clusters = 1
 
         for read in reads:
@@ -93,10 +94,12 @@ class Evolution:
 
                 if choice:
                     new_clusters[c].append(read)
+                    new_assignments[read] = c
 
         if ~choice:
             n_clusters += 1
             new_clusters[n_clusters] = [read]
+            new_assignments[c] = n_clusters
         
         child = Mapping(assignments=new_assignments)
 
