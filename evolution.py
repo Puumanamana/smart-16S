@@ -21,7 +21,7 @@ class Evolution:
       
     def __init__(self,N):
         self.pop_size = N
-        self.populations = {i: Mapping(i,N_MARKER) for i in range(N)}
+        self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         self.recombine_prob = .4
         self.mutation_rate = .1
         self.cores = 15
@@ -37,23 +37,25 @@ class Evolution:
             
     def select_next_gen(self):
         fitnesses = np.array([ p.fitness for p in self.populations.values() ])
-        fitnesses_inv = np.max(fitnesses)-fitnesses
+        fitnesses_inv = np.max(fitnesses)-fitnesses+0.0001
         
         recombination_probs = fitnesses / np.sum(fitnesses)
         drop_probs = fitnesses_inv / np.sum(fitnesses_inv)
 
+        N_choose = int(self.recombine_prob*self.pop_size)
+
         parent1 = np.random.choice(range(self.pop_size),
-                                   int(self.recombine_prob*self.pop_size),
+                                   N_choose,
                                    p=recombination_probs,
                                    replace=False)
         
         parent2 = np.random.choice(range(self.pop_size),
-                                   int(self.recombine_prob*self.pop_size),
+                                   N_choose,
                                    p=recombination_probs,
                                    replace=False)
         
         removed = np.random.choice(range(self.pop_size),
-                                   int(self.recombine_prob*self.pop_size),
+                                   N_choose,
                                    p=drop_probs,
                                    replace=False)
 
@@ -84,10 +86,11 @@ class Evolution:
                 reads_c = new_clusters[c]
                 # isTogether() returns the number of reads in reads_c that are in the same cluster as read
                 # Needs to check if reads_c is empty
-                res = [mapping.isTogether(read,reads_c) * mapping.fitness
-                       for mapping in mappings]
-                chooseYes = np.sum(res)
-                chooseNo = [ mappings[i].fitness for i in np.where(res==0) ]
+                res = np.array([mapping.isTogether(read,reads_c) * mapping.fitness
+                                for mapping in mappings])
+                chooseYes = res.sum()
+                chooseNo = np.sum([ mappings[i].fitness
+                                    for i in np.where(res.astype(int)==0)[0] ])
                 weights = np.array([chooseNo,chooseYes])
                 choice = np.random.choice([False,True],p=weights/weights.sum())
                 c += 1
@@ -101,7 +104,7 @@ class Evolution:
             new_clusters[n_clusters] = [read]
             new_assignments[c] = n_clusters
         
-        child = Mapping(assignments=new_assignments)
+        child = Mapping(N_MARKER,assignments=new_assignments)
 
         return child
 
@@ -122,8 +125,9 @@ class Evolution:
 
     def cycle(self):
         self.calc_fitnesses()
-        self.make_next_generation()
         self.mutate_generation()
+        self.make_next_generation()
+        print(np.max(self.fitnesses[-1]))
 
     def cycles(self,n_gen,n_plots=6):
         fig,ax = plt.subplots(1,n_plots)
@@ -157,7 +161,7 @@ class Evolution:
     
 if __name__ == '__main__':
 
-    ev = Evolution(500)
+    ev = Evolution(100)
     ev.cycles(200)
 
     ev.display_fitness()
