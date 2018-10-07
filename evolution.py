@@ -66,12 +66,40 @@ class Evolution:
             if np.random.uniform() < self.mutation_rate:
                 player.mutate()
 
-    def recombine(self,players):
-        child = Mapping()
-        w = np.array([p.fitness for p in players])
-        w /= w.sum()
+    def recombine(self,mappings):
+        '''
+        Mapping recombination between N individuals
+        Input: mapping object with contigency table
+        '''
+        reads = np.arange(0,N_MARKER)
+
+        new_clusters = {0:[]}
+        n_clusters = 1
+
+        for read in reads:
+            c = 0
+            choice = False
+            while ~choice and c<n_clusters:
+                reads_c = new_clusters[c]
+                # isTogether() returns the number of reads in reads_c that are in the same cluster as read
+                # Needs to check if reads_c is empty
+                res = [mapping.isTogether(read,reads_c) * mapping.fitness
+                       for mapping in mappings]
+                chooseYes = np.sum(res)
+                chooseNo = [ mappings[i].fitness for i in np.where(res==0) ]
+                weights = np.array([chooseNo,chooseYes])
+                choice = np.random.choice([False,True],p=weights/weights.sum())
+                c += 1
+
+                if choice:
+                    new_clusters[c].append(read)
+
+        if ~choice:
+            n_clusters += 1
+            new_clusters[n_clusters] = [read]
         
-        # To determine
+        child = Mapping(assignments=new_assignments)
+
         return child
     
     def make_next_generation(self):
