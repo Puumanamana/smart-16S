@@ -80,7 +80,7 @@ class Evolution:
         pool.close()
         for i,scores in enumerate(scores_list):
             self.populations[i].scores = scores
-            self.populations[i].fitness = scores.mean()
+            self.populations[i].fitness = (scores**2).mean()
 
         self.fitnesses.append([p.fitness for p in self.populations.values()])
 

@@ -26,7 +26,7 @@ def logNB1m(sequences,threshold=1e-1):
                       for _,v in seq.T.iterrows()])
         y[y<threshold] = threshold
         y[y>1-threshold] = 1-threshold
-        return np.sum((np.log(1-y))**2) # returns -SUM{log(1-P[x=1])}
+        return np.sum(np.log(1-y)) # returns -SUM{log(1-P[x=1])}
     return _logNB1m
 
 class Mapping:
