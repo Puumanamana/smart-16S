@@ -69,14 +69,14 @@ class Evolution:
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         self.recombine_prob = .5
         self.mutation_rate = .1
-        self.cores = 5
+        self.cores = 15
         self.fitnesses = []
 
     @timer
     def calc_fitnesses(self):
         pool = Pool(self.cores)
-        scores_list = list(map(evaluate,
-                               self.populations.values()))
+        scores_list = pool.map(evaluate,
+                               self.populations.values())
         pool.close()
         for i,scores in enumerate(scores_list):
             self.populations[i].scores = scores

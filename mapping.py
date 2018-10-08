@@ -3,31 +3,12 @@ import numpy as np
 from scipy.stats import nbinom,poisson
 import pandas as pd
 
-def convert_params(mu, sigma):
-    """
-    Convert mean/dispersion parameterization of a negative binomial to the ones scipy
-    """
-    # mu = max(1,mu)
-    # var = max(1.1,sigma**2)
-    if mu > sigma:
-        print('Invalid parameters: mu > sigma.')
-        sigma = mu+1
-
-    var = sigma**2
-    p = (var - mu) / var
-    r = mu**2 / (var-mu)
-
-    return r, 1-p
-
 def logNB1m(sequences,threshold=1e-1):
-    def _logNB1m(indices):
-        seq = sequences.iloc[indices]
-        y = np.array([poisson.pmf(v,v.mean())
-                      for _,v in seq.T.iterrows()])
-        y[y<threshold] = threshold
-        y[y>1-threshold] = 1-threshold
-        return np.sum(np.log(1-y)) # returns -SUM{log(1-P[x=1])}
-    return _logNB1m
+    y = np.array([poisson.pmf(v,v.mean())
+                  for v in sequences.T])
+    y[y<threshold] = threshold
+    y[y>1-threshold] = 1-threshold
+    return -np.sum(np.log(1-y)) # returns -SUM{log(1-P[x=1])}
 
 class Mapping:
 
@@ -69,7 +50,8 @@ class Mapping:
         self.contigency_table = (tmp == tmp.T).astype(int)
 
     def evaluate(self,sequences):
-        self.scores = self.hashtable.apply(logNB1m(sequences))
+        table = self.hashtable.apply(lambda x:sequences.iloc[x].values)
+        self.scores = table.apply(logNB1m)
         return self.scores
 
     def mutate(self):
