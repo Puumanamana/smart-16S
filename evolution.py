@@ -63,13 +63,13 @@ def recombine(mappings):
     return new_assignments
 
 class Evolution:
-      
+
     def __init__(self,N):
         self.pop_size = N
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         self.recombine_prob = .5
         self.mutation_rate = .1
-        self.cores = 15
+        self.cores = 5
         self.fitnesses = []
 
     @timer
@@ -87,7 +87,7 @@ class Evolution:
     def select_next_gen(self):
         fitnesses = np.array([ p.fitness for p in self.populations.values() ])
         fitnesses_inv = np.max(fitnesses)-fitnesses+0.0001
-        
+
         recombination_probs = fitnesses / np.sum(fitnesses)
         drop_probs = fitnesses_inv / np.sum(fitnesses_inv)
 
@@ -97,18 +97,18 @@ class Evolution:
                                    N_choose,
                                    p=recombination_probs,
                                    replace=False)
-        
+
         parent2 = np.random.choice(range(self.pop_size),
                                    N_choose,
                                    p=recombination_probs,
                                    replace=False)
-        
+
         removed = np.random.choice(range(self.pop_size),
                                    N_choose,
                                    p=drop_probs,
                                    replace=False)
 
-        
+
         return zip(parent1,parent2),removed
 
     @timer
@@ -128,7 +128,7 @@ class Evolution:
         assignments = pool.map(recombine,parent_list)
         pool.close()
         print('Recombination: {}'.format(time()-t0))
-            
+
         for nb,ass in enumerate(assignments):
             child = Mapping(N_MARKER,
                             ID=removed[nb],
@@ -154,7 +154,7 @@ class Evolution:
     def best(self):
        i_max = np.argmax(self.fitnesses[-1])
        return self.populations[i_max]
-       
+
     def display_fitness(self):
         fig,ax = plt.subplots()
         for i,v in enumerate(ev.fitnesses):
@@ -163,13 +163,11 @@ class Evolution:
         ax.plot(range(len(ev.fitnesses)),list(map(np.max,ev.fitnesses)),label='max',c='g')
         plt.legend()
         plt.show()
-        
-    
+
+
 if __name__ == '__main__':
 
     ev = Evolution(100)
     ev.cycles(100)
 
     ev.display_fitness()
-
-    

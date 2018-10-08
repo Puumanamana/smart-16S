@@ -5,26 +5,25 @@ import pandas as pd
 
 def convert_params(mu, sigma):
     """
-    Convert mean/dispersion parameterization of a negative binomial to the ones scipy 
+    Convert mean/dispersion parameterization of a negative binomial to the ones scipy
     """
     # mu = max(1,mu)
     # var = max(1.1,sigma**2)
     if mu > sigma:
         print('Invalid parameters: mu > sigma.')
         sigma = mu+1
-        
+
     var = sigma**2
     p = (var - mu) / var
     r = mu**2 / (var-mu)
-    
+
     return r, 1-p
 
 def logNB1m(sequences,threshold=1e-1):
     def _logNB1m(indices):
-        x = [sequences[i] for i in indices]
-        means = np.mean(x,axis=0)
-        y = [poisson.pmf(x,np.mean(x))]
-        # y = nbinom.logpmf(*convert_params(mu,std),x)
+        seq = sequences.iloc[indices]
+        y = np.array([poisson.pmf(v,v.mean())
+                      for _,v in seq.T.iterrows()])
         y[y<threshold] = threshold
         y[y>1-threshold] = 1-threshold
         return np.sum((np.log(1-y))**2) # returns -SUM{log(1-P[x=1])}
@@ -49,7 +48,7 @@ class Mapping:
         # Make sure every cluster has at least one element
         firsts = np.random.choice(self.Nseq,self.n_cluster,replace=False)
         others = np.setdiff1d(range(self.Nseq),firsts)
-        
+
         self.assignments = pd.Series( {i: np.random.randint(0,self.n_cluster)
                                        for i in others},
                                       name='cluster')
@@ -68,9 +67,9 @@ class Mapping:
                         axis=1)
         tmp.columns = tmp.index
         self.contigency_table = (tmp == tmp.T).astype(int)
-        
+
     def evaluate(self,sequences):
-        self.scores = self.hashtable.apply(logNB1m)
+        self.scores = self.hashtable.apply(logNB1m(sequences))
         return self.scores
 
     def mutate(self):
@@ -79,7 +78,7 @@ class Mapping:
         - Select a random marker for each selected cluster
         - Move it to a new cluster
         '''
-        
+
         inv_fitness = self.scores.max() - self.scores
         switch_probs = inv_fitness / inv_fitness.sum()
         switched = np.random.choice(switch_probs.index,
@@ -90,11 +89,10 @@ class Mapping:
         for marker in markers:
             self.assignments[marker] = self.n_cluster
         self.n_cluster += int(len(switched)>0)
-                
+
         self.setHashTable()
 
     def isTogether(self,read,reads_c):
         if self.contigency_table is None:
             self.setContigencyTable()
         return self.contigency_table.loc[read][reads_c].sum()
-        
