@@ -39,15 +39,15 @@ def recombine(mappings):
         while not selected and c<n_clusters:
             reads_c = new_clusters[c]
             # isTogether() returns the number of reads in reads_c that are in the same cluster as read
-            # Needs to check if reads_c is empty
-            res = np.array([mapping.isTogether(read,reads_c) * mapping.fitness
+            res = np.array([mapping.isTogether(read,reads_c) \
+                            * mapping.scores[mapping.assignments.loc[read]]
                             for mapping in mappings])
-            chooseYes = res.sum()
-            chooseNo = np.sum([ mappings[i].fitness
+            chooseYes = res.sum() # = SUM_i{n_together_in_i*score(cluster_i)}
+            chooseNo = np.sum([ mappings[i].scores[mappings[i].assignments.loc[read]]
                                 for i in np.where(res.astype(int)==0)[0] ])
             weights = np.array([chooseNo,chooseYes])
             selected = np.random.choice([False,True],p=weights/weights.sum())
-
+            
             if selected:
                 new_clusters[c].append(read)
                 new_assignments[read] = c
@@ -68,19 +68,19 @@ class Evolution:
         self.pop_size = N
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         self.recombine_prob = .5
-        self.mutation_rate = .1
+        self.mutation_rate = .2
         self.cores = 15
         self.fitnesses = []
 
     @timer
     def calc_fitnesses(self):
         pool = Pool(self.cores)
-        scores_list = pool.map(evaluate,
-                               self.populations.values())
+        scores_list = list(pool.map(evaluate,
+                               self.populations.values()))
         pool.close()
         for i,scores in enumerate(scores_list):
             self.populations[i].scores = scores
-            self.populations[i].fitness = (scores**2).mean()
+            self.populations[i].fitness = scores.mean()
 
         self.fitnesses.append([p.fitness for p in self.populations.values()])
 
@@ -125,7 +125,7 @@ class Evolution:
                        for i1,i2 in parent_indices]
         t0 = time()
         pool = Pool(self.cores)
-        assignments = pool.map(recombine,parent_list)
+        assignments = list(pool.map(recombine,parent_list))
         pool.close()
         print('Recombination: {}'.format(time()-t0))
 
@@ -139,8 +139,8 @@ class Evolution:
 
     def cycle(self):
         self.calc_fitnesses()
-        self.mutate_generation()
         self.make_next_generation()
+        self.mutate_generation()
         print(np.max(self.fitnesses[-1]))
 
     def cycles(self,n_gen,n_plots=6):
@@ -167,7 +167,7 @@ class Evolution:
 
 if __name__ == '__main__':
 
-    ev = Evolution(100)
+    ev = Evolution(200)
     ev.cycles(100)
 
     ev.display_fitness()

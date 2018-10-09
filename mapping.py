@@ -3,7 +3,7 @@ import numpy as np
 from scipy.stats import nbinom,poisson
 import pandas as pd
 
-def logNB1m(sequences,threshold=1e-1):
+def logNB1m(sequences,threshold=1e-3):
     y = np.array([poisson.pmf(v,v.mean())
                   for v in sequences.T])
     y[y<threshold] = threshold
@@ -16,12 +16,12 @@ class Mapping:
         self.id = ID
         self.Nseq = N
         self.assignments = assignments
-        self.mutation_frequency = 0.3
+        self.mutation = {'frequency': 0.1,
+                         'strength': 0.5}
         self.hashtable = None
         self.contigency_table = None
         if initialize:
             self.initialize(N)
-        self.n_cluster = len(self.assignments.unique())
         self.setHashTable()
 
     def initialize(self,N):
@@ -42,6 +42,7 @@ class Mapping:
                           .reset_index()
                           .groupby('cluster')['marker']
                           .apply(list))
+        self.n_cluster = self.hashtable.shape[0]
 
     def setContigencyTable(self):
         tmp = pd.concat([self.assignments]*len(self.assignments),
@@ -61,17 +62,19 @@ class Mapping:
         - Move it to a new cluster
         '''
 
-        inv_fitness = self.scores.max() - self.scores
-        switch_probs = inv_fitness / inv_fitness.sum()
-        switched = np.random.choice(switch_probs.index,
-                                    int(self.mutation_frequency*self.n_cluster),
-                                    p=switch_probs.values)
-        markers = [np.random.choice(self.hashtable[cluster])
+        # inv_fitness = self.scores.max() - self.scores
+        # switch_probs = inv_fitness / inv_fitness.sum()
+        switch_probs = np.array([1 if len(cluster)>1 else 1e-5
+                                 for cluster in self.hashtable.values])
+        switched = np.random.choice(self.hashtable.index,# switch_probs.index,
+                                    int(self.mutation['frequency']*self.n_cluster)+1,
+                                    p=switch_probs/switch_probs.sum())
+        markers = [np.random.choice(self.hashtable[cluster],
+                                    int(self.mutation['strength']*len(self.hashtable[cluster]))+1)
                    for cluster in switched]
-        for marker in markers:
-            self.assignments[marker] = self.n_cluster
-        self.n_cluster += int(len(switched)>0)
 
+        for i,marker in enumerate(markers):
+            self.assignments.loc[marker] = self.n_cluster + i
         self.setHashTable()
 
     def isTogether(self,read,reads_c):
