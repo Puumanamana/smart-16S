@@ -25,45 +25,38 @@ def evaluate(mapping):
     scores_reg = scores - REG * len(scores)
     return scores_reg.apply(lambda x:max(x,0.0001))
 
+
+def contingency2assignments(table):
+    groups = [np.unique(np.where(x==1)[0]) for x in table.astype(int)]
+    assignments = pd.Series([[]]*table.shape[0],name='cluster')
+    assignments.index.name = 'marker'
+    
+    for i,group in enumerate(groups):
+        for marker in list(group):
+            assignments[marker].append(i)
+    return assignments.apply(np.random.choice)
+
 def recombine(mappings):
-    '''
-    Mapping recombination between N individuals
-    Input: mapping object with contigency table
-    '''
-    reads = np.arange(0,N_MARKER)
 
-    new_clusters = {}
-    new_assignments = {}
-    n_clusters = 0
+    [ mapping.setContingencyTable()
+      for mapping in mappings ]
+    
+    contingency_prob = np.mean([mapping.contingency_table
+                               for mapping in mappings],
+                              axis=0)
+    
+    def choose(prob):
+        return np.random.uniform() < prob
+    
+    table = np.array(list(
+        map(choose,contingency_prob)
+    ))
+    
+    assignments_child = contingency2assignments(table)
 
-    for read in reads:
-        c = 0 # iterator through "new" clusters
-        selected = False
-        while not selected and c<n_clusters:
-            reads_c = new_clusters[c]
-            # isTogether() returns the number of reads in reads_c that are in the same cluster as read
-            res = np.array([mapping.isTogether(read,reads_c) \
-                            * mapping.scores[mapping.assignments.loc[read]]
-                            for mapping in mappings])
-            chooseYes = res.sum() # = SUM_i{n_together_in_i*score(cluster_i)}
-            chooseNo = np.sum([ mappings[i].scores[mappings[i].assignments.loc[read]]
-                                for i in np.where(res.astype(int)==0)[0] ])
-            weights = np.array([chooseNo,chooseYes])
-            selected = np.random.choice([False,True],p=weights/weights.sum())
-            
-            if selected:
-                new_clusters[c].append(read)
-                new_assignments[read] = c
-            c += 1
+    return assignments_child
 
-        if not selected:
-            new_clusters[n_clusters] = [read]
-            new_assignments[read] = n_clusters
-            n_clusters += 1
 
-    new_assignments = pd.Series(new_assignments,name='cluster')
-    new_assignments.index.name = 'marker'
-    return new_assignments
 
 class Evolution:
 
