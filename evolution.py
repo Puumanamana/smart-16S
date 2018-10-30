@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 from multiprocessing.pool import Pool
 
 np.random.seed(1234)
-N_MARKER = 28
 sequences = pd.read_csv('./sim1.csv',index_col=0)
+N_MARKER = sequences.shape[0]
+REG = 0.1
 
 def timer(fun):
     def fun_wrapper(*args,**kwargs):
@@ -20,7 +21,9 @@ def timer(fun):
     return fun_wrapper
 
 def evaluate(mapping):
-    return mapping.evaluate(sequences)
+    scores = mapping.evaluate(sequences)
+    scores_reg = scores - REG * len(scores)
+    return scores_reg.apply(lambda x:max(x,0.0001))
 
 def recombine(mappings):
     '''
@@ -71,6 +74,8 @@ class Evolution:
         self.mutation_rate = .2
         self.cores = 15
         self.fitnesses = []
+        self.solution = Mapping.fromCSV()
+        self.solution.fitness = self.solution.evaluate(sequences).mean()
 
     @timer
     def calc_fitnesses(self):
@@ -113,10 +118,9 @@ class Evolution:
 
     @timer
     def mutate_generation(self):
-        for player in self.populations.values():
+        for mapping in self.populations.values():
             if np.random.uniform() < self.mutation_rate:
-                player.mutate()
-
+                mapping.mutate()
 
     @timer
     def make_next_generation(self):
@@ -139,15 +143,17 @@ class Evolution:
 
     def cycle(self):
         self.calc_fitnesses()
-        self.make_next_generation()
         self.mutate_generation()
-        print(np.max(self.fitnesses[-1]))
+        self.make_next_generation()
+        print('Best individual: {}\nSolution fitness: {}'.format(
+            np.max(self.fitnesses[-1]),
+            self.solution.fitness))
 
     def cycles(self,n_gen,n_plots=6):
         for n in range(n_gen):
             print('Generation {}/{}'.format(n,n_gen))
             self.cycle()
-            if (n+1) % 5 == 0:
+            if n % 3 == 0:
                 print(self.best().hashtable)
         return self
 
@@ -167,7 +173,5 @@ class Evolution:
 
 if __name__ == '__main__':
 
-    ev = Evolution(200)
-    ev.cycles(100)
-
-    ev.display_fitness()
+    ev = Evolution(100)
+    ev.cycles(15)
