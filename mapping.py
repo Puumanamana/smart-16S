@@ -16,14 +16,14 @@ class Mapping:
         self.id = ID
         self.Nseq = N
         self.assignments = assignments
-        self.mutation = {'frequency': 0.1,
-                         'strength': 0.5}
+        # self.mutation = {'frequency': 0.1,
+        #                  'strength': 0.5}
         self.hashtable = None
-        self.contigency_table = None
+        self.contingency_table = None
         if initialize:
             self.initialize(N)
-        self.setHashTable()
         self._n_cluster = None
+        self.setHashTable()
 
     @property
     def n_cluster(self):
@@ -56,11 +56,11 @@ class Mapping:
                           .groupby('cluster')['marker']
                           .apply(list))
 
-    def setContigencyTable(self):
+    def setContingencyTable(self):
         tmp = pd.concat([self.assignments]*len(self.assignments),
                         axis=1)
         tmp.columns = tmp.index
-        self.contigency_table = (tmp == tmp.T).astype(int)
+        self.contingency_table = (tmp == tmp.T).astype(int)
 
     def evaluate(self,sequences):
         table = self.hashtable.apply(lambda x:sequences.iloc[x].values)
@@ -72,14 +72,19 @@ class Mapping:
         mutation_probs = self.assignments.reset_index() 
         mutation_probs['probs'] = probs_per_cluster[mutation_probs.cluster].values
 
+        clusters = self.hashtable.index.tolist()
+
         def choose(entry):
-            n_cluster = self.n_cluster
-            p_else = (1-entry[2])/n_cluster
-            probs = [p_else]*(1+n_cluster)
-            probs[int(entry[1])] = entry[2]
-            return np.random.choice(n_cluster+1,p=probs)
+            new_cluster = np.setdiff1d(range(max(clusters)+2),clusters)[0]
+            p_else = (1-entry[2])/self.n_cluster
+            probs = [ entry[2] if c==entry[1] else p_else
+                      for c in clusters+[new_cluster] ]
+            return np.random.choice(clusters+[new_cluster],p=probs)
         
         self.assignments = mutation_probs.apply(choose,axis=1)
+        self.assignments.index.name = 'marker'
+        self.assignments.name = 'cluster'
+
         self.setHashTable()
 
     # def splitMutate(self,mutation_probs):
@@ -113,7 +118,7 @@ class Mapping:
     #     self.setHashTable()
             
 
-    # def isTogether(self,read,reads_c):
-    #     if self.contigency_table is None:
-    #         self.setContigencyTable()
-    #     return self.contigency_table.loc[read][reads_c].sum()
+    def isTogether(self,read,reads_c):
+        if self.contingency_table is None:
+            self.setContingencyTable()
+        return self.contingency_table.loc[read][reads_c].sum()

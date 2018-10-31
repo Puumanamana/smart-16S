@@ -25,7 +25,6 @@ def evaluate(mapping):
     scores_reg = scores - REG * len(scores)
     return scores_reg.apply(lambda x:max(x,0.0001))
 
-
 def contingency2assignments(table):
     groups = [np.unique(np.where(x==1)[0]) for x in table.astype(int)]
     assignments = pd.Series([[]]*table.shape[0],name='cluster')
@@ -63,8 +62,8 @@ class Evolution:
     def __init__(self,N):
         self.pop_size = N
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
-        self.recombine_prob = .5
-        self.mutation_rate = .2
+        self.recombine_prob = .3
+        self.mutation_rate = .3
         self.cores = 15
         self.fitnesses = []
         self.solution = Mapping.fromCSV()
@@ -84,10 +83,10 @@ class Evolution:
 
     def select_next_gen(self):
         fitnesses = np.array([ p.fitness for p in self.populations.values() ])
-        fitnesses_inv = np.max(fitnesses)-fitnesses+0.0001
+        # fitnesses_inv = np.max(fitnesses)-fitnesses+0.0001
+        # drop_probs = fitnesses_inv / np.sum(fitnesses_inv)
 
         recombination_probs = fitnesses / np.sum(fitnesses)
-        drop_probs = fitnesses_inv / np.sum(fitnesses_inv)
 
         N_choose = int(self.recombine_prob*self.pop_size)
 
@@ -100,11 +99,12 @@ class Evolution:
                                    N_choose,
                                    p=recombination_probs,
                                    replace=False)
-
-        removed = np.random.choice(range(self.pop_size),
-                                   N_choose,
-                                   p=drop_probs,
-                                   replace=False)
+        removed = sorted(range(self.pop_size),
+                         key=lambda x: self.populations[x].fitness)[0:N_choose]
+        # removed = np.random.choice(range(self.pop_size),
+        #                            N_choose,
+        #                            p=drop_probs,
+        #                            replace=False)
 
 
         return zip(parent1,parent2),removed
@@ -113,7 +113,12 @@ class Evolution:
     def mutate_generation(self):
         for mapping in self.populations.values():
             if np.random.uniform() < self.mutation_rate:
+                assignments = mapping.assignments.copy()
                 mapping.mutate()
+                
+                if mapping.evaluate(sequences).mean() < mapping.fitness:
+                    mapping.assignments = assignments
+                    mapping.setHashTable()
 
     @timer
     def make_next_generation(self):
@@ -167,4 +172,4 @@ class Evolution:
 if __name__ == '__main__':
 
     ev = Evolution(100)
-    ev.cycles(15)
+    ev.cycles(100)
