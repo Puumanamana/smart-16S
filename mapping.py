@@ -3,14 +3,16 @@ import numpy as np
 from scipy.stats import nbinom
 import pandas as pd
 
+import matplotlib as mpl
+mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from generate_data import convert_params
 
-ALPHA = 50 # estimate alpha from the data?
+ALPHA = 5 # estimate alpha from the data?
 
-def logNB1m(sequences,threshold=1e-2):
+def logNB1m(sequences,thresholds=[1e-3,1e-1]):
     scores = []
     for seq in sequences.T:
         seq_pos = seq[seq>0]
@@ -19,7 +21,7 @@ def logNB1m(sequences,threshold=1e-2):
             params = convert_params(mu,mu/ALPHA)
             
             score_seq = nbinom.pmf(seq,*params) / nbinom.pmf(mu,*params)
-            score_seq = [min(max(x,threshold),1-threshold) for x in score_seq]
+            score_seq = [min(max(x,thresholds[0]),1-thresholds[1]) for x in score_seq]
             scores.append(score_seq)
     return -np.log(1-np.array(scores)) # returns -{log(1-P[v])}_{marker,sample}
 
@@ -84,7 +86,7 @@ class Mapping:
         scores = (self.hashtable["marker"]
                   .apply(lambda x:sequences.iloc[x].values)
                   .apply(logNB1m)
-                  .apply(lambda x: np.percentile(x,75,axis=0))#np.exp(np.log(x).mean(axis=0)))
+                  .apply(lambda x: np.percentile(x,25,axis=0))#np.exp(np.log(x).mean(axis=0)))
         )
 
         # Scores = {cluster: [marker_scores across samples] }

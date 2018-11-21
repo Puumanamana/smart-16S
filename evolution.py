@@ -8,6 +8,9 @@ import scipy.stats as scy
 import sklearn.metrics
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+import matplotlib as mpl
+mpl.use('TkAgg')
 from multiprocessing.pool import Pool
 
 np.random.seed(1234)
@@ -26,7 +29,7 @@ def evaluate(mapping):
     assignments = mapping.evaluate(sequences)
     # clusters_len = mapping.hashtable.apply(len)
     # clusters_len = mapping.hashtable.apply(len).loc[assignments["cluster"].tolist()]
-    cluster_scores = assignments.groupby('cluster')['fit'].agg("mean")
+    cluster_scores = assignments.groupby('cluster')['fit'].agg("prod")
     fitness = cluster_scores.fillna(0).sum()
 
     return (assignments,cluster_scores,fitness)
@@ -84,7 +87,7 @@ class Evolution:
         # Adaptive rates using direction of highest variability?
         self.recombine_prob = .3
         self.mutation_rate = .5
-        self.pool = Pool(15)
+        self.pool = Pool(2)
         self.arity = 3
         self.fitnesses = []
         self.metrics = []
@@ -209,5 +212,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(100)
-    ev.cycles(100)
+    ev = Evolution(50)
+    ev.cycles(20)
