@@ -30,7 +30,7 @@ class Mapping:
         self.id = ID
         self.Nseq = N
         self.assignments = assignments
-        self.mutation = { 'freq': 0.1 }
+        self.mutation = { 'freq': 0.2 }
         self.hashtable = None
         self.contingency_table = None
         if initialize:

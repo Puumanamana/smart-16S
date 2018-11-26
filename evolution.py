@@ -212,5 +212,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(50)
+    ev = Evolution(100)
     ev.cycles(20)
