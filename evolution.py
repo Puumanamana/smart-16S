@@ -114,11 +114,12 @@ class Evolution:
         self.pop_size = N
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         # Adaptive rates using direction of highest variability?
-        self.recombine_prob = .2
-        self.mutation_rate = .5
+        self.recombine_prob = .25
+        self.mutation_rate = .75
         self.pool = Pool(20)
         self.arity = 2
         self.metrics = []
+        self.fitnesses = []
         
         self.solution = Mapping.fromCSV()
 
@@ -134,7 +135,8 @@ class Evolution:
             self.populations[i].assignments = assignments
             self.populations[i].hashtable["scores"] = cluster_scores
             self.populations[i].fitness = fitness
-
+        self.fitnesses.append([p.fitness for p in self.populations.values()])
+            
     def select_next_gen(self):
         fitnesses = scy.rankdata([ p.fitness for p in self.populations.values() ])
 
@@ -191,12 +193,11 @@ class Evolution:
         pred = self.best().assignments["cluster"].values
 
         metrics = {'adjusted_rand_score:': sklearn.metrics.adjusted_rand_score(truth,pred),
-                   'normalized_mutual_info_score': sklearn.metrics.normalized_mutual_info_score(truth,pred),
+                   'adjusted_mutual_info_score': sklearn.metrics.adjusted_mutual_info_score(truth,pred),
                    '# clusters_ratio': self.best().n_cluster / self.solution.n_cluster,
                    'fitness': self.best().fitness / self.solution.fitness }
         
         self.metrics.append(metrics)
-        print(metrics)
 
     def cycle(self):
         self.calc_fitnesses()
@@ -218,6 +219,7 @@ class Evolution:
 
         self.pool.close()
         self.plot_metrics()
+        self.display_fitness()
         #self.best().plot(sequences)
         return self
 
@@ -228,7 +230,7 @@ class Evolution:
        return self.populations[fitnesses[0][0]]
 
     def plot_metrics(self):
-        import ipdb;ipdb.set_trace()
+
         metrics_df = pd.DataFrame(self.metrics)
         metrics_df = pd.melt(metrics_df.reset_index(),id_vars=["index"])
        
@@ -237,7 +239,7 @@ class Evolution:
 
     def display_fitness(self):
         fig,ax = plt.subplots()
-        for i,v in enumerate(ev.fitnesses):
+        for i,v in enumerate(self.fitnesses):
             ax.scatter([i]*len(v),v,s=1,c='b')
         ax.plot(range(len(ev.fitnesses)),list(map(np.mean,ev.fitnesses)),label='mean',c='k')
         ax.plot(range(len(ev.fitnesses)),list(map(np.max,ev.fitnesses)),label='max',c='g')
@@ -246,5 +248,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(50)
-    ev.cycles(100)
+    ev = Evolution(100)
+    ev.cycles(300)
