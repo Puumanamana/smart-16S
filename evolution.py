@@ -115,10 +115,9 @@ class Evolution:
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         # Adaptive rates using direction of highest variability?
         self.recombine_prob = .2
-        self.mutation_rate = .75
-        self.pool = Pool(10)
+        self.mutation_rate = .5
+        self.pool = Pool(20)
         self.arity = 2
-        self.fitnesses = []
         self.metrics = []
         
         self.solution = Mapping.fromCSV()
@@ -128,7 +127,6 @@ class Evolution:
         self.solution.fitness = sol_fitness
         self.solution.hashtable["scores"] = sol_scores
 
-    @timer
     def calc_fitnesses(self):
         results_list = list(self.pool.map(evaluate,
                                           self.populations.values()))
@@ -136,7 +134,6 @@ class Evolution:
             self.populations[i].assignments = assignments
             self.populations[i].hashtable["scores"] = cluster_scores
             self.populations[i].fitness = fitness
-        self.fitnesses.append([p.fitness for p in self.populations.values()])
 
     def select_next_gen(self):
         fitnesses = scy.rankdata([ p.fitness for p in self.populations.values() ])
@@ -155,7 +152,6 @@ class Evolution:
 
         return list(parents),removed
 
-    @timer
     def mutate_generation(self):
         pop_to_mutate = np.random.choice(self.pop_size,
                                          int(self.mutation_rate*self.pop_size),
@@ -168,7 +164,6 @@ class Evolution:
             self.populations[i].hashtable = hashtable
             self.populations[i].fitness = fitness
         
-    @timer
     def make_next_generation(self):
         parent_indices,removed = self.select_next_gen()
         parent_list = [[self.populations[i] for i in indices]
@@ -199,27 +194,27 @@ class Evolution:
                    'normalized_mutual_info_score': sklearn.metrics.normalized_mutual_info_score(truth,pred),
                    '# clusters_ratio': self.best().n_cluster / self.solution.n_cluster,
                    'fitness': self.best().fitness / self.solution.fitness }
-
+        
         self.metrics.append(metrics)
+        print(metrics)
 
     def cycle(self):
         self.calc_fitnesses()
         self.mutate_generation()
         print('Best individual: {}\nSolution fitness: {}'.format(
-            np.max(self.fitnesses[-1]),
+            self.best().fitness,
             self.solution.fitness))
-        self.make_next_generation()
         self.save_metrics()
+        self.make_next_generation()
 
     def cycles(self,n_gen,n_plots=6):
         for n in range(n_gen):
             print('Generation {}/{}'.format(n,n_gen))
             self.cycle()
-            if n % 3 == 0:
-                print(pd.concat([self.best().hashtable,
+            if n % 5 == 0:
+                print(pd.concat([self.best().hashtable.reindex(range(self.best().n_cluster)),
                                  self.solution.hashtable],
-                                axis=1,
-                                ignore_index=True))
+                                axis=1))
 
         self.pool.close()
         self.plot_metrics()
@@ -233,12 +228,12 @@ class Evolution:
        return self.populations[fitnesses[0][0]]
 
     def plot_metrics(self):
-       metrics_df = pd.DataFrame(self.metrics)
-       metrics_df = (metrics_df-metrics_df.mean())/metrics_df.max()
-       metrics_df = pd.melt(metrics_df.reset_index(),id_vars=["index"])
+        import ipdb;ipdb.set_trace()
+        metrics_df = pd.DataFrame(self.metrics)
+        metrics_df = pd.melt(metrics_df.reset_index(),id_vars=["index"])
        
-       sns.lineplot(x="index",y="value",hue="variable",data=metrics_df)
-       plt.show()
+        sns.lineplot(x="index",y="value",hue="variable",data=metrics_df)
+        plt.show()
 
     def display_fitness(self):
         fig,ax = plt.subplots()
@@ -251,5 +246,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(100)
+    ev = Evolution(50)
     ev.cycles(100)
