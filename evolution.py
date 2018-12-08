@@ -8,6 +8,7 @@ import scipy.stats as scy
 import sklearn.metrics
 import matplotlib.pyplot as plt
 import seaborn as sns
+import networkx as nx
 
 import matplotlib as mpl
 mpl.use('TkAgg')
@@ -50,33 +51,55 @@ def mutate(mapping):
     
 
 def contingency2assignments(table):
-    groups = [np.unique(np.where(x==1)[0]) for x in table.astype(int)]
-    assignments = pd.Series([[]]*table.shape[0],name='cluster')
-    assignments.index.name = 'marker'
+    groups = [np.unique(np.where(x==1)[0]).tolist() for x in table.astype(int)]
     
-    for i,group in enumerate(groups):
-        for marker in list(group):
-            assignments.loc[marker].append(i)
-    return assignments.apply(np.random.choice)
+    G = nx.Graph()
+    G.add_nodes_from(np.arange(table.shape[0]))
+    G.add_edges_from([group for group in groups if len(group) > 1])
+    clusters = nx.connected_components(G)
+
+    assignments = pd.Series([[]]*table.shape[0], name='cluster')
+    assignments.index.name = 'marker'
+
+    for i,group in enumerate(clusters):
+        assignments.loc[group] = i
+
+    return pd.DataFrame(assignments)
 
 def recombine(mappings):
 
     [ mapping.setContingencyTable()
       for mapping in mappings ]
-    
-    contingency_prob = np.mean([mapping.contingency_table
-                               for mapping in mappings],
-                              axis=0)
-    def choose(prob):
-        return np.random.uniform() < prob
-    
-    table = np.array(list(
-        map(choose,contingency_prob)
-    ))
-    
-    assignments_child = contingency2assignments(table)
 
-    return assignments_child
+    parents_nclust = [ mapping.n_cluster for mapping in mappings ]
+    ncluster_child = np.random.randint(min(parents_nclust),max(parents_nclust)+1)
+    child = Mapping(N_MARKER)
+
+    combined_parents = sum([mapping.contingency_table.values for mapping in mappings])
+    
+    contingency_table = (combined_parents == len(mappings)).astype(int)
+                        
+    child.assignments = contingency2assignments(contingency_table)
+
+    pairs = np.argwhere((combined_parents < len(mappings))
+                        & (combined_parents > 0))
+
+    count = 0
+    while child.n_cluster > ncluster_child:
+
+        if count > len(pairs):
+            print("count>pairs: This should not be possible. Aborting")
+            exit(1)
+            
+        i,j = pairs[count]
+
+        clusters = (child.assignments.iloc[i]["cluster"],
+                    child.assignments.iloc[j]["cluster"])
+        
+        child.assignments[child.assignments==clusters[1]] = clusters[0]
+        count += 1
+
+    return child.assignments
 
 
 class Evolution:
@@ -88,7 +111,7 @@ class Evolution:
         self.recombine_prob = .3
         self.mutation_rate = .5
         self.pool = Pool(2)
-        self.arity = 3
+        self.arity = 2
         self.fitnesses = []
         self.metrics = []
         
@@ -212,5 +235,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(100)
+    ev = Evolution(50)
     ev.cycles(20)

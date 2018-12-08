@@ -76,6 +76,7 @@ class Mapping:
                                       .apply(list))
 
     def setContingencyTable(self):
+        self.assignments.sort_index(inplace=True)
         tmp = pd.concat([self.assignments["cluster"]]*self.assignments.shape[0],
                         axis=1)
         tmp.columns = tmp.index
