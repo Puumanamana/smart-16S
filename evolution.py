@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from itertools import chain
 from mapping import Mapping
 from time import time
 import numpy as np
@@ -22,40 +23,50 @@ REG = 1
 def timer(fun):
     def fun_wrapper(*args,**kwargs):
         t0 = time()
+        try:
+            best_before = args[0].best().fitness
+        except:
+            best_before = np.nan
         fun(*args,**kwargs)
-        print('{0} - Elapsed time: {1:.3f}'.format(fun.__name__,time()-t0))
+        best_after = args[0].best().fitness
+        
+        print('{0} - Best fitness {1} --> {2} ({3:.3f}s)'.format(fun.__name__,
+                                                                 best_before,
+                                                                 best_after,
+                                                                 time()-t0))
     return fun_wrapper
 
 def evaluate(mapping):
     assignments = mapping.evaluate(sequences)
-    # clusters_len = mapping.hashtable.apply(len)
-    # clusters_len = mapping.hashtable.apply(len).loc[assignments["cluster"].tolist()]
     cluster_scores = assignments.groupby('cluster')['fit'].agg("prod")
     fitness = cluster_scores.fillna(0).sum()
-
     return (assignments,cluster_scores,fitness)
 
 def mutate(mapping):
-    assignments = mapping.assignments.copy()
-    mapping.mutate()
-    _,new_scores,new_fitness = evaluate(mapping)
-        
-    if new_fitness < mapping.fitness:
-        mapping.assignments = assignments
-        mapping.setHashTable()
-        mapping.hashtable["scores"] = new_scores
+
+    new_mapping = Mapping(N_MARKER,
+                          assignments=mapping.assignments.copy(),
+                          initialize=False)
+    new_mapping.mutate()
+    new_assignments,new_cluster_scores,new_fitness = evaluate(new_mapping)
+
+    if mapping.fitness <= new_fitness:
+        new_mapping.hashtable["scores"] = new_cluster_scores
+        return (new_assignments,new_fitness,new_mapping.hashtable)
     else:
-        mapping.fitness = new_fitness
-        
-    return (mapping.assignments,mapping.fitness,mapping.hashtable)
+        return (mapping.assignments,mapping.fitness,mapping.hashtable)
     
 
 def contingency2assignments(table):
     groups = [np.unique(np.where(x==1)[0]).tolist() for x in table.astype(int)]
+    components = [group for group in groups if len(group) > 1]
+    edges = list(chain(*[[ component[i:i+2]
+                           for i in range(len(component)-1) ]
+                         for component in components]))
     
     G = nx.Graph()
     G.add_nodes_from(np.arange(table.shape[0]))
-    G.add_edges_from([group for group in groups if len(group) > 1])
+    G.add_edges_from(edges)
     clusters = nx.connected_components(G)
 
     assignments = pd.Series([[]]*table.shape[0], name='cluster')
@@ -85,12 +96,7 @@ def recombine(mappings):
                         & (combined_parents > 0))
 
     count = 0
-    while child.n_cluster > ncluster_child:
-
-        if count > len(pairs):
-            print("count>pairs: This should not be possible. Aborting")
-            exit(1)
-            
+    while child.n_cluster > ncluster_child:            
         i,j = pairs[count]
 
         clusters = (child.assignments.iloc[i]["cluster"],
@@ -108,9 +114,9 @@ class Evolution:
         self.pop_size = N
         self.populations = {i: Mapping(N_MARKER,ID=i) for i in range(N)}
         # Adaptive rates using direction of highest variability?
-        self.recombine_prob = .3
-        self.mutation_rate = .5
-        self.pool = Pool(2)
+        self.recombine_prob = .2
+        self.mutation_rate = .75
+        self.pool = Pool(10)
         self.arity = 2
         self.fitnesses = []
         self.metrics = []
@@ -121,11 +127,11 @@ class Evolution:
         self.solution.assignments = sol_assign
         self.solution.fitness = sol_fitness
         self.solution.hashtable["scores"] = sol_scores
-        
+
     @timer
     def calc_fitnesses(self):
         results_list = list(self.pool.map(evaluate,
-                                self.populations.values()))
+                                          self.populations.values()))
         for i,(assignments,cluster_scores,fitness) in enumerate(results_list):
             self.populations[i].assignments = assignments
             self.populations[i].hashtable["scores"] = cluster_scores
@@ -178,6 +184,11 @@ class Evolution:
                             assignments=assignment_df,
                             initialize=False)
 
+            assignments,cluster_scores,fitness = evaluate(child)
+            child.assignments = assignments
+            child.hashtable["scores"] = cluster_scores
+            child.fitness = fitness
+
             self.populations[removed[nb]] = child
 
     def save_metrics(self):
@@ -186,8 +197,8 @@ class Evolution:
 
         metrics = {'adjusted_rand_score:': sklearn.metrics.adjusted_rand_score(truth,pred),
                    'normalized_mutual_info_score': sklearn.metrics.normalized_mutual_info_score(truth,pred),
-                   'completeness_score': sklearn.metrics.completeness_score(truth,pred),
-                   'fitness': self.best().fitness }
+                   '# clusters_ratio': self.best().n_cluster / self.solution.n_cluster,
+                   'fitness': self.best().fitness / self.solution.fitness }
 
         self.metrics.append(metrics)
 
@@ -205,7 +216,10 @@ class Evolution:
             print('Generation {}/{}'.format(n,n_gen))
             self.cycle()
             if n % 3 == 0:
-                print(self.best().hashtable,self.solution.hashtable)
+                print(pd.concat([self.best().hashtable,
+                                 self.solution.hashtable],
+                                axis=1,
+                                ignore_index=True))
 
         self.pool.close()
         self.plot_metrics()
@@ -213,8 +227,10 @@ class Evolution:
         return self
 
     def best(self):
-       i_max = np.argmax(self.fitnesses[-1])
-       return self.populations[i_max]
+       fitnesses = sorted([(i,p.fitness) for i,p in self.populations.items()],
+                          reverse=True, key=lambda x:x[1])
+       
+       return self.populations[fitnesses[0][0]]
 
     def plot_metrics(self):
        metrics_df = pd.DataFrame(self.metrics)
@@ -235,5 +251,5 @@ class Evolution:
 
 
 if __name__ == '__main__':
-    ev = Evolution(50)
-    ev.cycles(20)
+    ev = Evolution(100)
+    ev.cycles(100)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import numpy as np
-from scipy.stats import nbinom
 import pandas as pd
 
 import matplotlib as mpl
@@ -8,29 +7,20 @@ mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from generate_data import convert_params
+def score(data):
+    if data.shape[0]>1:
+        scores = (1-np.percentile(np.corrcoef(data),10,axis=0))/2
+    else:
+        scores = [ 0.5 ]
 
-ALPHA = 5 # estimate alpha from the data?
-
-def logNB1m(sequences,thresholds=[1e-3,1e-1]):
-    scores = []
-    for seq in sequences.T:
-        seq_pos = seq[seq>0]
-        if len(seq_pos) > 0:
-            mu = np.floor(np.median(seq_pos))
-            params = convert_params(mu,mu/ALPHA)
-            
-            score_seq = nbinom.pmf(seq,*params) / nbinom.pmf(mu,*params)
-            score_seq = [min(max(x,thresholds[0]),1-thresholds[1]) for x in score_seq]
-            scores.append(score_seq)
-    return -np.log(1-np.array(scores)) # returns -{log(1-P[v])}_{marker,sample}
+    return -np.log(scores)
 
 class Mapping:
     def __init__(self,N,ID=None,assignments={},initialize=True):
         self.id = ID
         self.Nseq = N
         self.assignments = assignments
-        self.mutation = { 'freq': 0.2 }
+        self.mutation = { 'freq': 0.25 }
         self.hashtable = None
         self.contingency_table = None
         if initialize:
@@ -86,11 +76,9 @@ class Mapping:
 
         scores = (self.hashtable["marker"]
                   .apply(lambda x:sequences.iloc[x].values)
-                  .apply(logNB1m)
-                  .apply(lambda x: np.percentile(x,25,axis=0))#np.exp(np.log(x).mean(axis=0)))
+                  .apply(lambda x: score(x))
         )
 
-        # Scores = {cluster: [marker_scores across samples] }
         scores = pd.concat([self.hashtable["marker"],scores],axis=1)
         scores.columns = ["markers","scores"]
         
@@ -100,13 +88,10 @@ class Mapping:
         for cluster,vals in scores.iterrows():
             for i,marker in enumerate(vals['markers']):
                 assignments.loc[marker,"fit"] = vals["scores"][i]
-                
+
         return assignments
 
     def mutate(self):
-        # probs_per_cluster = self. / self.scores.sum()
-        # mutation_probs = self.assignments.reset_index() 
-        # mutation_probs['probs'] = probs_per_cluster[mutation_probs.cluster].values
 
         mutation_probs = 1/self.assignments['fit']
         mutation_probs /= mutation_probs.sum()
@@ -123,19 +108,6 @@ class Mapping:
         for marker,assignment in zip(mutated_markers,new_assignments):
             self.assignments.loc[marker,"cluster"] = assignment
             
-        # clusters = self.hashtable.index.tolist()
-
-        # def choose(entry):
-        #     new_cluster = np.setdiff1d(range(max(clusters)+2),clusters)[0]
-        #     p_else = (1-entry[2])/self.n_cluster
-        #     probs = [ entry[2] if c==entry[1] else p_else
-        #               for c in clusters+[new_cluster] ]
-        #     return np.random.choice(clusters+[new_cluster],p=probs)
-        
-        # self.assignments = mutation_probs.apply(choose,axis=1)
-        # self.assignments.index.name = 'marker'
-        # self.assignments.name = 'cluster'
-
         self.setHashTable()
 
     def plot(self,data):
@@ -145,17 +117,4 @@ class Mapping:
 
         g = sns.FacetGrid(plot_data,col='cluster',col_wrap=3,sharey=False)
         g.map(sns.lineplot,'variable','value','index',estimator=None)
-        # sns.lineplot(x='variable',
-        #              y='value',
-        #              hue='cluster',
-        #              units='index',
-        #              estimator=None,
-        #              lw=1,
-        #              palette=sns.color_palette("hls",self.n_cluster),
-        #              data=plot_data)
         plt.show()
-
-    # def isTogether(self,read,reads_c):
-    #     if self.contingency_table is None:
-    #         self.setContingencyTable()
-    #     return self.contingency_table.loc[read][reads_c].sum()
